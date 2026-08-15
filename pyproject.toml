@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyrospeed"
+version = "0.1.0"
+description = "High-performance async upload/download acceleration for Pyrogram-compatible Telegram clients"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "pyrospeed contributors"}]
+keywords = ["telegram", "pyrogram", "kurigram", "pyrofork", "mtproto", "asyncio", "upload", "download"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: AsyncIO",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Communications :: Chat",
+  "Topic :: Internet",
+]
+dependencies = []
+
+[project.optional-dependencies]
+pyrogram = ["pyrogram>=2", "tgcrypto>=1.2"]
+kurigram = ["kurigram>=2", "tgcrypto>=1.2"]
+pyrofork = ["pyrofork>=2", "tgcrypto>=1.2"]
+hydrogram = ["hydrogram", "tgcrypto>=1.2"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "build>=1.2"]
+
+[project.scripts]
+pyrospeed-doctor = "pyrospeed.diagnostics:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pyrospeed = ["py.typed"]
