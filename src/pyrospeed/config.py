@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+
+
 from .errors import TransferConfigurationError
 
 
@@ -102,3 +104,4 @@ class TransferConfig:
             upload=UploadConfig(connections=8, inflight_per_connection=2, queue_factor=2),
             download=DownloadConfig(workers=8, segment_chunks=4),
         )
+

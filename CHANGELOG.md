@@ -15,3 +15,8 @@ Initial release.
 - Pyrogram-family capability detection and media-session factory.
 - Conservative/balanced/aggressive presets plus fine-grained configuration.
 - Offline unit tests, benchmark, diagnostics CLI, and design/API/performance/compatibility docs.
+
+- Added optional parallel media iterator with ordered concurrent ranged reads.
+
+
+- Added optional media DC connection pool layer with Pyrogram compatibility focus.

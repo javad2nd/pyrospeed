@@ -83,3 +83,8 @@ Two different limits exist on purpose:
 - *between files*: `max_parallel_files`.
 
 The default `max_parallel_files=1` prevents an application with many simultaneous `send_*()` calls from multiplying session counts unexpectedly. Raise it only after measuring CPU, memory, sockets, and flood/rate-limit behavior.
+
+
+## Media DC Pool
+
+Added optional Pyrogram-compatible media connection pooling. It uses session factory hooks and avoids hard dependency on Pyrogram private internals.

@@ -61,3 +61,29 @@ class InstanceUploadPatch:
             self._depth -= 1
             if self._depth == 0 and not self._manual:
                 self._restore()
+
+
+class InstanceStreamPatch:
+    """Scoped stream_media monkey patch using PyroSpeed async pipeline."""
+
+    def __init__(self, client: Any, stream_wrapper: Any) -> None:
+        self.client = client
+        self.stream_wrapper = stream_wrapper
+        self.previous = _MISSING
+
+    def install(self) -> None:
+        if self.previous is not _MISSING:
+            return
+        self.previous = self.client.__dict__.get("stream_media", _MISSING)
+        if "_pyrospeed_native_stream_media" not in self.client.__dict__:
+            self.client._pyrospeed_native_stream_media = self.client.stream_media
+        self.client.stream_media = self.stream_wrapper
+
+    def uninstall(self) -> None:
+        if self.previous is _MISSING:
+            return
+        if self.previous is _MISSING:
+            self.client.__dict__.pop("stream_media", None)
+        else:
+            self.client.stream_media = self.previous
+        self.previous = _MISSING

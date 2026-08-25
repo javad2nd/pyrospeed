@@ -17,3 +17,5 @@ __all__ = [
 ]
 
 __version__ = "0.1.0"
+
+from .media_pool import MediaConnectionPool, MediaConnectionConfig

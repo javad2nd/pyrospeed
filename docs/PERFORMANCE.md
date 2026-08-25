@@ -63,3 +63,11 @@ Avoid drawing conclusions from:
 - one run per profile;
 - benchmark runs during changing network load;
 - deleting or sending messages concurrently with the timed transfer unless that is part of the workload.
+
+## stream_media acceleration
+
+Added configurable streaming modes:
+- `chunked`: fixed size output similar
+- `any`: immediate transport chunk delivery
+
+This allows callers to choose between predictable buffers and lowest latency.
