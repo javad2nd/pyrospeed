@@ -82,8 +82,8 @@ class InstanceStreamPatch:
     def uninstall(self) -> None:
         if self.previous is _MISSING:
             return
-        if self.previous is _MISSING:
-            self.client.__dict__.pop("stream_media", None)
-        else:
+        self.client.__dict__.pop("_pyrospeed_native_stream_media", None)
+        self.client.__dict__.pop("stream_media", None)
+        if self.previous is not _MISSING:
             self.client.stream_media = self.previous
         self.previous = _MISSING

@@ -1,5 +1,6 @@
 from .client import PyroSpeed, accelerate
 from .config import DownloadConfig, TransferConfig, UploadConfig
+from .stream import StreamConfig
 from .errors import CompatibilityError, PyroSpeedError, TransferConfigurationError, UnknownFileSizeError
 from .progress import TransferSnapshot
 
@@ -9,6 +10,7 @@ __all__ = [
     "TransferConfig",
     "UploadConfig",
     "DownloadConfig",
+    "StreamConfig",
     "TransferSnapshot",
     "PyroSpeedError",
     "CompatibilityError",
@@ -16,6 +18,6 @@ __all__ = [
     "UnknownFileSizeError",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .media_pool import MediaConnectionPool, MediaConnectionConfig

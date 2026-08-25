@@ -5,7 +5,8 @@ from typing import Any, Optional
 from .compat import FrameworkBinding, validate_client
 from .config import TransferConfig
 from .download import ParallelDownloader
-from .patch import InstanceUploadPatch
+from .patch import InstanceUploadPatch, InstanceStreamPatch
+from .stream import StreamManager, StreamConfig
 from .upload import ParallelUploader
 
 
@@ -30,14 +31,18 @@ class PyroSpeed:
             binding=self.binding,
         )
         self.patch = InstanceUploadPatch(client, self.uploader)
+        self.streamer = StreamManager(client)
+        self.stream_patch = InstanceStreamPatch(client, self.streamer.stream_media)
 
     def install(self) -> "PyroSpeed":
         """Make all high-level upload methods on this Client use pyrospeed."""
         self.patch.install()
+        self.stream_patch.install()
         return self
 
     def uninstall(self) -> None:
         self.patch.uninstall()
+        self.stream_patch.uninstall()
 
     async def __aenter__(self) -> "PyroSpeed":
         self.install()
@@ -86,6 +91,7 @@ class PyroSpeed:
             "upload_inflight_per_connection": self.config.upload.inflight_per_connection,
             "upload_buffer_bytes_approx": self.config.upload.approximate_buffer_bytes,
             "download_workers": self.config.download.workers,
+            "stream_pipeline": True,
         }
 
 
