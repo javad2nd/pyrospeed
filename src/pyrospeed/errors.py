@@ -12,3 +12,7 @@ class TransferConfigurationError(PyroSpeedError, ValueError):
 
 class UnknownFileSizeError(PyroSpeedError):
     """Parallel download requires a known file size."""
+
+
+class IncompleteDownloadError(PyroSpeedError, OSError):
+    """A media segment was truncated or exceeded its expected byte range."""

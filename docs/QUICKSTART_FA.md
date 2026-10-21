@@ -5,7 +5,7 @@
 اگر Kurigram دارید:
 
 ```bash
-python -m pip install pyrospeed-0.1.0-py3-none-any.whl
+python -m pip install pyrospeed-0.2.1-py3-none-any.whl
 python -m pip install kurigram tgcrypto
 ```
 

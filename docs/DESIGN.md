@@ -69,11 +69,11 @@ Known-size downloads are partitioned into independent 1-MiB-based `get_file` ran
 
 Regular writes run through `asyncio.to_thread` by default.
 
-The target is only replaced after all segments complete. The descriptor is closed before replacement for Windows compatibility. Failed/cancelled transfers try to remove the `.pyrospeed.part` file.
+The target is only replaced after all segments complete. The descriptor is closed before replacement for Windows compatibility. Failed/cancelled transfers try to remove their unique `.pyrospeed.<random>.part` file. All segment byte counts are checked before the atomic replacement, and the Client semaphore is never monkey-patched.
 
 ## Instance-scoped integration
 
-A global `Client.save_file = ...` monkey patch can make unrelated client instances share state and can create hard-to-debug races. `InstanceUploadPatch` assigns only `client.save_file` on one object and restores the exact previous instance state.
+A global `Client.save_file = ...` monkey patch can make unrelated client instances share state and can create hard-to-debug races. `InstanceUploadPatch` assigns only `client.save_file` on one object and restores the exact previous instance state. A per-client patch stack supports multiple independent owners, including out-of-order removals. The stream patch follows the same rules.
 
 ## Resource controls
 

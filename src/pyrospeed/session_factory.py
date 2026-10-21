@@ -58,17 +58,24 @@ class SessionFactory:
             auth_key = await Auth(self.client, dc_id, test_mode).create()
 
         session = Session(self.client, dc_id, auth_key, test_mode, is_media=True)
-        await session.start()
-
-        if dc_id != home_dc:
-            exported = await self.client.invoke(
-                self.binding.raw.functions.auth.ExportAuthorization(dc_id=dc_id)
-            )
-            await session.invoke(
-                self.binding.raw.functions.auth.ImportAuthorization(
-                    id=exported.id,
-                    bytes=exported.bytes,
+        try:
+            await session.start()
+            if dc_id != home_dc:
+                exported = await self.client.invoke(
+                    self.binding.raw.functions.auth.ExportAuthorization(dc_id=dc_id)
                 )
-            )
-
+                await session.invoke(
+                    self.binding.raw.functions.auth.ImportAuthorization(
+                        id=exported.id,
+                        bytes=exported.bytes,
+                    )
+                )
+        except BaseException:
+            # A partially-started session must not survive failed authorization
+            # or cancellation. Preserve the original error on cleanup failure.
+            try:
+                await session.stop()
+            except BaseException:
+                pass
+            raise
         return SessionLease(session=session, owned=True)

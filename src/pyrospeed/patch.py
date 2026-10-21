@@ -7,40 +7,85 @@ from .upload import ParallelUploader
 
 
 _MISSING = object()
+_STATE_ATTR = "_pyrospeed_patch_states"
+_NATIVE_STREAM_ATTR = "_pyrospeed_native_stream_media"
 
 
-class InstanceUploadPatch:
-    """Patch only one client instance; never mutates Client globally.
+class _PatchState:
+    """Per-client, per-method patch stack, including inherited original methods."""
 
-    The scoped context is reference-counted so overlapping async sends using the
-    same PyroSpeed object cannot restore ``save_file`` while another send is
-    still in progress.
-    """
-
-    def __init__(self, client: Any, uploader: ParallelUploader) -> None:
+    def __init__(self, client: Any, method: str) -> None:
         self.client = client
-        self.uploader = uploader
-        self._previous: Any = _MISSING
+        self.method = method
+        self.original_slot = client.__dict__.get(method, _MISSING)
+        self.original_method = getattr(client, method)
+        self.owners: list[Any] = []
+        self.native_stream_slot = client.__dict__.get(_NATIVE_STREAM_ATTR, _MISSING)
+
+    def refresh(self) -> None:
+        if self.owners:
+            self.client.__dict__[self.method] = self.owners[-1].replacement
+            if self.method == "stream_media":
+                self.client.__dict__[_NATIVE_STREAM_ATTR] = self.original_method
+            return
+
+        if self.original_slot is _MISSING:
+            self.client.__dict__.pop(self.method, None)
+        else:
+            self.client.__dict__[self.method] = self.original_slot
+        if self.method == "stream_media":
+            if self.native_stream_slot is _MISSING:
+                self.client.__dict__.pop(_NATIVE_STREAM_ATTR, None)
+            else:
+                self.client.__dict__[_NATIVE_STREAM_ATTR] = self.native_stream_slot
+
+
+def original_method(client: Any, method: str) -> Any:
+    """Return the unpatched method, even if another PyroSpeed facade is active."""
+    state = client.__dict__.get(_STATE_ATTR, {}).get(method)
+    return state.original_method if state is not None else getattr(client, method)
+
+
+class _InstancePatch:
+    def __init__(self, client: Any, method: str, replacement: Any) -> None:
+        self.client = client
+        self.method = method
+        self.replacement = replacement
         self._installed = False
-        self._manual = False
-        self._depth = 0
 
     def _apply(self) -> None:
         if self._installed:
             return
-        self._previous = self.client.__dict__.get("save_file", _MISSING)
-        self.client.save_file = self.uploader.save_file
+        states = self.client.__dict__.setdefault(_STATE_ATTR, {})
+        state = states.get(self.method)
+        if state is None:
+            state = states[self.method] = _PatchState(self.client, self.method)
+        state.owners.append(self)
         self._installed = True
+        state.refresh()
 
     def _restore(self) -> None:
         if not self._installed:
             return
-        if self._previous is _MISSING:
-            self.client.__dict__.pop("save_file", None)
-        else:
-            self.client.save_file = self._previous
+        states = self.client.__dict__[_STATE_ATTR]
+        state = states[self.method]
+        state.owners.remove(self)
         self._installed = False
-        self._previous = _MISSING
+        state.refresh()
+        if not state.owners:
+            states.pop(self.method)
+        if not states:
+            self.client.__dict__.pop(_STATE_ATTR, None)
+
+
+class InstanceUploadPatch(_InstancePatch):
+    """Reversible instance-only patch; concurrent scopes and multiple owners are safe."""
+
+    def __init__(self, client: Any, uploader: ParallelUploader) -> None:
+        self.uploader = uploader
+        super().__init__(client, "save_file", uploader.save_file)
+        self._manual = False
+        self._depth = 0
 
     def install(self) -> None:
         self._manual = True
@@ -63,27 +108,17 @@ class InstanceUploadPatch:
                 self._restore()
 
 
-class InstanceStreamPatch:
-    """Scoped stream_media monkey patch using PyroSpeed async pipeline."""
+class InstanceStreamPatch(_InstancePatch):
+    """Reversible stream_media patch preserving class-level and instance methods."""
 
     def __init__(self, client: Any, stream_wrapper: Any) -> None:
-        self.client = client
-        self.stream_wrapper = stream_wrapper
-        self.previous = _MISSING
+        super().__init__(client, "stream_media", stream_wrapper)
 
     def install(self) -> None:
-        if self.previous is not _MISSING:
+        # Some compatible clients have no stream_media. Upload/download still work.
+        if not hasattr(self.client, "stream_media"):
             return
-        self.previous = self.client.__dict__.get("stream_media", _MISSING)
-        if "_pyrospeed_native_stream_media" not in self.client.__dict__:
-            self.client._pyrospeed_native_stream_media = self.client.stream_media
-        self.client.stream_media = self.stream_wrapper
+        self._apply()
 
     def uninstall(self) -> None:
-        if self.previous is _MISSING:
-            return
-        self.client.__dict__.pop("_pyrospeed_native_stream_media", None)
-        self.client.__dict__.pop("stream_media", None)
-        if self.previous is not _MISSING:
-            self.client.stream_media = self.previous
-        self.previous = _MISSING
+        self._restore()

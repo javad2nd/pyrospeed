@@ -45,12 +45,17 @@ class ProgressDispatcher:
         self.started = time.monotonic()
         self._last_call = 0.0
         self._lock = asyncio.Lock()
+        # Callback invocations are serialized in the exact order snapshots are
+        # taken, without holding the accounting lock during user code.
+        self._last_emission: Optional[asyncio.Future[None]] = None
 
     async def add(self, count: int) -> None:
         if count <= 0:
             return
         should_call = False
         current = 0
+        previous: Optional[asyncio.Future[None]] = None
+        emission: Optional[asyncio.Future[None]] = None
         async with self._lock:
             self.current = min(self.total, self.current + count) if self.total else self.current + count
             current = self.current
@@ -62,8 +67,18 @@ class ProgressDispatcher:
             ):
                 self._last_call = now
                 should_call = True
+                previous = self._last_emission
+                emission = asyncio.get_running_loop().create_future()
+                self._last_emission = emission
         if should_call:
-            await self._invoke(current)
+            assert emission is not None
+            try:
+                if previous is not None:
+                    await previous
+                await self._invoke(current)
+            finally:
+                if not emission.done():
+                    emission.set_result(None)
 
     async def finish(self) -> None:
         # add() already emits a final callback when current reaches total.

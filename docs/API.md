@@ -35,9 +35,9 @@ A bare file-id string has no size metadata, so pass `file_size=` to enable the p
 
 ### `speed.install()` / `speed.uninstall()`
 
-Patches only `client.save_file` on the supplied client instance. This lets existing `client.send_*()` calls use pyrospeed without changing every call site.
+Patches only `client.save_file` and, when available, `client.stream_media` on the supplied client instance. This lets existing `client.send_*()` calls use pyrospeed without changing every call site.
 
-The patch is reversible and reference-counted for overlapping scoped wrappers.
+Both patches are reversible even when methods come from the Client class. Multiple PyroSpeed instances may patch the same Client, and removing one does not disrupt the others.
 
 ### async context manager
 
@@ -64,7 +64,7 @@ Returns a diagnostics dictionary containing detected framework namespace/version
 | `inflight_per_connection` | 2 | concurrent part RPCs allowed on each media session |
 | `queue_factor` | 2 | bounded task-window multiplier |
 | `part_size` | 512 KiB | Telegram upload part size; validated against protocol constraints |
-| `large_file_threshold` | 10 MiB | boundary for `SaveBigFilePart`; may only be moved earlier, never above 10 MiB |
+| `large_file_threshold` | 10 MiB | native fallback upper bound; actual `SaveBigFilePart` boundary is always strictly above 10 MiB |
 | `progress_interval` | 0.25 s | callback throttle interval |
 | `disk_io` | `thread` | move regular file I/O off the event loop (`thread` or `inline`) |
 | `small_file_strategy` | `native` | `native` or optional parallel `SaveFilePart` + MD5 path |
@@ -88,7 +88,7 @@ This is not total process memory; protocol/encryption/socket/task overhead is ad
 | `queue_factor` | 2 | bounded task-window multiplier |
 | `progress_interval` | 0.25 s | callback throttle interval |
 | `disk_io` | `thread` | move random-access writes off the event loop |
-| `override_client_semaphore` | true | temporarily align `get_file_semaphore` to worker count if present |
+| `override_client_semaphore` | true | deprecated compatibility field; no longer mutates shared Client semaphore |
 | `fallback_to_native_for_unknown_size` | true | native download when size is unknown |
 | `max_parallel_files` | 1 | simultaneous files handled by this downloader object |
 
@@ -110,3 +110,4 @@ Presets are starting points, not speed guarantees.
 - `CompatibilityError`: required Pyrogram-compatible capabilities could not be found
 - `TransferConfigurationError`: invalid protocol/tuning setting
 - `UnknownFileSizeError`: parallel download requested without a known size and native fallback disabled
+- `IncompleteDownloadError`: a ranged segment is truncated or delivers unexpected extra bytes

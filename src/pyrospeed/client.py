@@ -5,7 +5,7 @@ from typing import Any, Optional
 from .compat import FrameworkBinding, validate_client
 from .config import TransferConfig
 from .download import ParallelDownloader
-from .patch import InstanceUploadPatch, InstanceStreamPatch
+from .patch import InstanceUploadPatch, InstanceStreamPatch, original_method
 from .stream import StreamManager, StreamConfig
 from .upload import ParallelUploader
 
@@ -18,7 +18,7 @@ class PyroSpeed:
         self.client = client
         self.config = config or TransferConfig.balanced()
         self.binding = FrameworkBinding.from_client(client)
-        self._native_save_file = client.save_file
+        self._native_save_file = original_method(client, "save_file")
         self.uploader = ParallelUploader(
             client,
             self.config.upload,

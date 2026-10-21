@@ -55,3 +55,9 @@ For the complete facade, the supplied client is expected to expose:
 - `rnd_id`
 
 Large upload additionally needs raw upload/auth/session machinery compatible with the detected framework.
+
+## v0.2.1 source/API compatibility
+
+Public facade methods and configuration constructor signatures are unchanged. `large_file_threshold` and `override_client_semaphore` are still accepted; see `README.md` upgrade notes for their corrected behavior. Both inherited and instance-defined stream methods are restored correctly. No application migration is required for the default configuration, but applications depending on changing the Client's semaphore during transfers should explicitly configure the Client instead.
+
+Run the included offline regression suite and a live smoke test for the exact fork/version combination you deploy.

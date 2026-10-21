@@ -168,7 +168,7 @@ path = await speed.download(
 )
 ```
 
-The downloader splits the file into ranges. Pyrogram's `get_file()` treats `offset` and `limit` in 1-MiB chunk units, so each worker can fetch a distinct range and write it at the correct offset.
+The downloader splits the file into ranges. Pyrogram's `get_file()` treats `offset` and `limit` in 1-MiB chunk units, so each worker can fetch a distinct range and write it at the correct offset. It verifies each segment before reporting success. It does **not** override the shared Client semaphore: the framework's own transfer cap may limit effective concurrency and the workers do not necessarily imply independent TCP connections.
 
 Unknown-size or in-memory downloads fall back to `Client.download_media()` by default.
 
@@ -197,7 +197,7 @@ config = TransferConfig(
         segment_chunks=4,  # 4 MiB per ranged get_file call
         queue_factor=2,
         progress_interval=0.2,
-        override_client_semaphore=True,
+        override_client_semaphore=True,  # retained for API compatibility; now a no-op
         max_parallel_files=1,
     ),
 )
@@ -258,11 +258,22 @@ await speed.send_document("me", "file.bin", progress=progress)
 
 Callbacks are throttled by `progress_interval`, with a final completion callback.
 
+## Upgrade notes for v0.2.1
+
+Existing `PyroSpeed(app)`, `speed.install()`/`uninstall()`, `send_*()`, `upload_file()` and `download()` calls retain their signatures. `TransferConfig`, `UploadConfig`, and `DownloadConfig` fields also remain accepted. Behavioral fixes:
+
+- `large_file_threshold` remains accepted as the maximum size eligible for native small-upload fallback, but **MTProto `SaveBigFilePart` is now selected only when file size exceeds 10 MiB**, regardless of that setting. Older code that lowered the threshold to force parallel uploads still enables parallel parts but uses `SaveFilePart` for files <= 10 MiB.
+- `override_client_semaphore` is deprecated and ignored (no client-wide temporary reassignment). If your speed depended on that reassignment, set the client's supported `max_concurrent_transmissions` at Client construction, if available.
+- Directory downloads discard path components in Telegram-provided filenames. Same-destination concurrent downloads each write into a unique staging file; the last successful atomic replacement wins.
+- Truncated or overlong ranged downloads now raise `IncompleteDownloadError` rather than returning a potentially corrupted path. Failed upload part acknowledgments are also errors.
+- Progress callbacks run sequentially in snapshot order; this can apply backpressure when a callback is slow.
+- The optional `MediaConnectionPool` is still not automatically wired into the transfer engines. Its lifecycle cleanup is more robust, but enabling it requires explicit integration.
+
 ## Cancellation and failure behavior
 
 - A failed upload request cancels outstanding upload tasks and closes owned temporary media sessions.
-- Downloads first write to `*.pyrospeed.part` and atomically replace the destination after success.
-- Failed/cancelled downloads remove the temporary file when possible.
+- Downloads first write to an exclusive `*.pyrospeed.<random>.part` file, validate every expected byte, and atomically replace the destination after success.
+- Failed/cancelled downloads remove their own temporary file when possible; multiple downloads never share a `.part` file.
 - The native Pyrogram `FILE_PART_X_MISSING` resend contract is preserved: if the framework calls patched `save_file(..., file_id=..., file_part=N)`, pyrospeed resends that exact part.
 
 ## Event-loop behavior

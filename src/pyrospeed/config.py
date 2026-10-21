@@ -39,6 +39,10 @@ class UploadConfig:
             raise TransferConfigurationError(
                 "upload.large_file_threshold must be in 0..10 MiB; Telegram requires big-file mode above 10 MiB"
             )
+        if self.disk_io not in ("thread", "inline"):
+            raise TransferConfigurationError("disk_io must be 'thread' or 'inline'")
+        if self.small_file_strategy not in ("native", "parallel"):
+            raise TransferConfigurationError("upload.small_file_strategy must be 'native' or 'parallel'")
         if not 1 <= self.max_parallel_files <= 16:
             raise TransferConfigurationError("upload.max_parallel_files must be in 1..16")
 
@@ -61,7 +65,7 @@ class DownloadConfig:
     queue_factor: int = 2
     progress_interval: float = 0.25
     disk_io: Literal["thread", "inline"] = "thread"
-    override_client_semaphore: bool = True
+    override_client_semaphore: bool = True  # deprecated; retained, no mutation of Client
     fallback_to_native_for_unknown_size: bool = True
     max_parallel_files: int = 1
 
@@ -78,6 +82,8 @@ class DownloadConfig:
             raise TransferConfigurationError("download.queue_factor must be in 1..16")
         if self.progress_interval < 0:
             raise TransferConfigurationError("download.progress_interval must be >= 0")
+        if self.disk_io not in ("thread", "inline"):
+            raise TransferConfigurationError("download.disk_io must be 'thread' or 'inline'")
         if not 1 <= self.max_parallel_files <= 16:
             raise TransferConfigurationError("download.max_parallel_files must be in 1..16")
 

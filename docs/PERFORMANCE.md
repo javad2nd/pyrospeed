@@ -45,6 +45,8 @@ Start with:
 - `workers=4` as a balanced profile;
 - `workers=8` only after measurement.
 
+The download `workers` limit is the maximum number of active ranged read coroutines, **not** a guarantee of that many independent sockets. Pyrogram-family clients may also apply a shared `get_file_semaphore`. PyroSpeed no longer replaces that semaphore due to concurrent-transfer safety. To tune that framework limit, use the Client's supported constructor option (such as `max_concurrent_transmissions`) and benchmark.
+
 ## Disk mode
 
 `disk_io="thread"` is the safe default for asyncio servers and bots because ordinary filesystem reads/writes can block. `inline` can reduce thread-hop overhead on exceptionally fast/controlled storage, but measure event-loop latency before using it in production.

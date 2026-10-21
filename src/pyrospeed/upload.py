@@ -69,9 +69,12 @@ class ParallelUploader:
             if file_size <= 0:
                 raise ValueError("File size equals 0 B")
 
-            is_big = file_size > self.config.large_file_threshold
+            # Telegram selects SaveBigFilePart strictly above 10 MiB. Keep the
+            # configurable threshold only as an opt-in cutoff for the native
+            # small-file optimization (legacy configs remain accepted).
+            is_big = file_size > 10 * 1024 * 1024
             if (
-                not is_big
+                file_size <= self.config.large_file_threshold
                 and file_id is None
                 and self.config.small_file_strategy == "native"
             ):
@@ -87,6 +90,19 @@ class ParallelUploader:
                 )
 
             total_parts = math.ceil(file_size / self.config.part_size)
+            # These are today's widely supported part-count ceilings; an
+            # individual DC may impose a lower server-configured limit.
+            if total_parts > 8000:
+                raise ValueError(
+                    f"Upload requires {total_parts} parts, exceeding the 8000-part "
+                    "maximum supported by current Telegram clients"
+                )
+            premium = getattr(getattr(self.client, "me", None), "is_premium", None)
+            if premium is False and total_parts > 4000:
+                raise ValueError(
+                    f"Upload requires {total_parts} parts, exceeding the 4000-part "
+                    "limit for non-Premium accounts"
+                )
             dc_id = await self.client.storage.dc_id()
 
             if file_id is not None:
@@ -137,15 +153,22 @@ class ParallelUploader:
                             bytes=chunk,
                         )
                     async with limiters[index]:
-                        await leases[index].session.invoke(rpc)
+                        accepted = await leases[index].session.invoke(rpc)
+                    if accepted is False:
+                        raise OSError(f"Telegram rejected upload part {part_no}")
                     await dispatcher.add(len(chunk))
 
                 await self._seek(fp, 0)
                 part_no = 0
+                read_bytes = 0
                 while True:
                     chunk = await self._read(fp, self.config.part_size)
                     if not chunk:
                         break
+                    remaining = file_size - read_bytes
+                    if part_no >= total_parts or len(chunk) != min(self.config.part_size, remaining):
+                        raise OSError("Source size changed or returned a short part during upload")
+                    read_bytes += len(chunk)
                     if checksum is not None:
                         checksum.update(chunk)
                     pending.add(asyncio.create_task(upload_one(part_no, chunk)))
@@ -160,6 +183,10 @@ class ParallelUploader:
                 if pending:
                     await asyncio.gather(*pending)
                     pending.clear()
+                if part_no != total_parts or read_bytes != file_size:
+                    raise OSError(
+                        f"Source changed during upload: read {read_bytes} of {file_size} bytes"
+                    )
                 await dispatcher.finish()
             except BaseException:
                 for task in pending:
@@ -195,8 +222,12 @@ class ParallelUploader:
             if isinstance(path, (str, os.PathLike, PurePath)):
                 path_str = os.fspath(path)
                 fp = open(path_str, "rb", buffering=0)
-                size = os.path.getsize(path_str)
-                return fp, os.path.basename(path_str), size, True
+                try:
+                    size = os.fstat(fp.fileno()).st_size
+                    return fp, os.path.basename(path_str), size, True
+                except BaseException:
+                    fp.close()
+                    raise
             if isinstance(path, io.IOBase):
                 name = getattr(path, "name", "file")
                 name = "file" if isinstance(name, int) else os.path.basename(str(name))
@@ -246,6 +277,8 @@ class ParallelUploader:
         total_parts: int,
         is_big: bool,
     ) -> None:
+        if not 0 <= file_part < total_parts:
+            raise ValueError(f"Missing part {file_part} is outside the file")
         await self._seek(fp, self.config.part_size * file_part)
         chunk = await self._read(fp, self.config.part_size)
         if not chunk:
@@ -265,7 +298,9 @@ class ParallelUploader:
                     file_part=file_part,
                     bytes=chunk,
                 )
-            await lease.session.invoke(rpc)
+            accepted = await lease.session.invoke(rpc)
+            if accepted is False:
+                raise OSError(f"Telegram rejected upload part {file_part}")
             return None
         finally:
             await lease.close()
